@@ -30,13 +30,19 @@ export default function Home() {
     "23:00 - 00:00",
   ];
 
-  // Postavljamo današnji datum kao početni (format: YYYY-MM-DD)
-  const danasnjiDatum = new Date().toISOString().split("T")[0];
+  // Funkcija koja sigurno računa lokalni datum na uređaju korisnika (izbjegava UTC pomak)
+  const dobijLokalniDatum = () => {
+    const d = new Date();
+    const godina = d.getFullYear();
+    const mjesec = String(d.getMonth() + 1).padStart(2, "0");
+    const dan = String(d.getDate()).padStart(2, "0");
+    return `${godina}-${mjesec}-${dan}`;
+  };
 
-  // 2. PRAVA BAZA (Početno prazan niz, puni se iz baze preko useEffect-a)
+  const danasnjiDatum = dobijLokalniDatum();
+
+  // 2. STANJA ZA PODATKE I INTERAKCIJU
   const [rezervacije, setRezervacije] = useState<Rezervacija[]>([]);
-
-  // Stanja za interakciju (Inicijalno stavljamo danasnjiDatum kako bi SSR prošao bez greške)
   const [odabraniDatum, setOdabraniDatum] = useState(danasnjiDatum);
   const [odabranoVrijeme, setOdabranoVrijeme] = useState<string | null>(null);
 
@@ -48,11 +54,21 @@ export default function Home() {
     tip: "uspjeh" | "greska";
   } | null>(null);
 
-  // KORAK A: Dohvaćanje zadnjeg odabranog datuma iz localStorage-a nakon što se komponenta montira na klijentu
+  // KORAK A: Dohvaćanje i provjera datuma iz localStorage-a nakon montiranja komponente
   useEffect(() => {
     const spremljeniDatum = localStorage.getItem("zadnjiOdabraniDatum");
+    const lokalniDanas = dobijLokalniDatum();
+
     if (spremljeniDatum) {
-      setOdabraniDatum(spremljeniDatum);
+      // Ako je spremljeni datum stariji od današnjeg, resetiraj na danasnji dan
+      if (spremljeniDatum < lokalniDanas) {
+        setOdabraniDatum(lokalniDanas);
+        localStorage.setItem("zadnjiOdabraniDatum", lokalniDanas);
+      } else {
+        setOdabraniDatum(spremljeniDatum);
+      }
+    } else {
+      setOdabraniDatum(lokalniDanas);
     }
   }, []);
 
@@ -74,7 +90,6 @@ export default function Home() {
 
     if (!odabranoVrijeme || !ime || !telefon) return;
 
-    // Šaljemo podatke na naš backend API
     try {
       const res = await fetch("/api/rezervacije", {
         method: "POST",
@@ -100,19 +115,19 @@ export default function Home() {
         // Osiguravamo da je trenutni datum spremljen u localStorage nakon uspješne rezervacije
         localStorage.setItem("zadnjiOdabraniDatum", odabraniDatum);
 
-        // Povuci svježe podatke kako bi gumb odmah postao siv bez F5
+        // Povuci svježe podatke kako bi gumb odmah postao siv bez F5 osvježavanja
         const osvjezi = await fetch("/api/rezervacije");
         const noveRezervacije = await osvjezi.json();
         if (Array.isArray(noveRezervacije)) {
           setRezervacije(noveRezervacije);
         }
 
-        // Resetiranje forme i zatvaranje prozora za unos
+        // Resetiranje forme i zatvaranje prozora za unos podatak
         setIme("");
         setTelefon("");
         setOdabranoVrijeme(null);
       } else {
-        // Ako je backend javio grešku (npr. termin zauzet u međuvremenu)
+        // Ako je backend javio grešku (npr. termin je zauzet u međuvremenu)
         setPoruka({
           tekst: data.message || "Dogodila se greška prilikom spremanja.",
           tip: "greska",
@@ -162,7 +177,7 @@ export default function Home() {
             <input
               type="date"
               value={odabraniDatum}
-              min={danasnjiDatum} // Korisnik ne može birati prošlost
+              min={danasnjiDatum} // Korisnik ne može birati dane u prošlosti
               onChange={(e) => {
                 const noviDatum = e.target.value;
                 setOdabraniDatum(noviDatum);
@@ -193,12 +208,12 @@ export default function Home() {
 
                 if (odabraniDatum === danasnjiDatum) {
                   // Izvlačimo početno vrijeme termina (npr. iz "17:00 - 18:00" uzimamo "17:00")
-                  const pocetnoVrijeme = satnica.split(" - ")[0]; // "17:00"
+                  const pocetnoVrijeme = satnica.split(" - ")[0];
                   const [satTermina, minutaTermina] = pocetnoVrijeme
                     .split(":")
                     .map(Number);
 
-                  // Dohvaćamo trenutno stvarno vrijeme na uređaju korisnika
+                  // Realno trenutno vrijeme na uređaju korisnika
                   const sada = new Date();
                   const trenutniSat = sada.getHours();
                   const trenutnaMinuta = sada.getMinutes();
@@ -229,10 +244,10 @@ export default function Home() {
                     }}
                     className={`p-4 rounded-2xl text-center font-bold transition duration-200 shadow-sm ${
                       onemoguciGumb
-                        ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" // Izgled ako je ZAUZETO ili U PROŠLOSTI
+                        ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
                         : odabranoVrijeme === satnica
-                          ? "bg-emerald-600 text-white ring-4 ring-emerald-300 scale-95" // TRENUTAČNO ODABRAN
-                          : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:scale-105" // SLOBODAN
+                          ? "bg-emerald-600 text-white ring-4 ring-emerald-300 scale-95"
+                          : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:scale-105"
                     }`}
                   >
                     <div className="text-sm">{satnica}</div>
@@ -251,7 +266,7 @@ export default function Home() {
 
           {/* KORAK 3: POJAVLJIVANJE FORME NAKON ODABIRA SLOBODNOG TERMINA */}
           {odabranoVrijeme && (
-            <div className="mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto animate-fadeIn">
+            <div className="mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto">
               <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">
                 Unesite podatke za rezervaciju
               </h3>
