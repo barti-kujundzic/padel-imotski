@@ -1,65 +1,311 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect } from "react";
+
+interface Rezervacija {
+  id: number;
+  ime: string;
+  telefon: string;
+  datum: string;
+  vrijeme: string;
+}
 
 export default function Home() {
+  // 1. POPIS SVIH MOGUĆIH TERMINA TIJEKOM DANA
+  const sviTermini = [
+    "08:00 - 09:00",
+    "09:00 - 10:00",
+    "10:00 - 11:00",
+    "11:00 - 12:00",
+    "12:00 - 13:00",
+    "13:00 - 14:00",
+    "14:00 - 15:00",
+    "15:00 - 16:00",
+    "16:00 - 17:00",
+    "17:00 - 18:00",
+    "18:00 - 19:00",
+    "19:00 - 20:00",
+    "20:00 - 21:00",
+    "21:00 - 22:00",
+    "22:00 - 23:00",
+    "23:00 - 00:00",
+  ];
+
+  // Postavljamo današnji datum kao početni (format: YYYY-MM-DD)
+  const danasnjiDatum = new Date().toISOString().split("T")[0];
+
+  // 2. PRAVA BAZA (Početno prazan niz, puni se iz baze preko useEffect-a)
+  const [rezervacije, setRezervacije] = useState<Rezervacija[]>([]);
+
+  // Stanja za interakciju (Inicijalno stavljamo danasnjiDatum kako bi SSR prošao bez greške)
+  const [odabraniDatum, setOdabraniDatum] = useState(danasnjiDatum);
+  const [odabranoVrijeme, setOdabranoVrijeme] = useState<string | null>(null);
+
+  // Stanja za formu
+  const [ime, setIme] = useState("");
+  const [telefon, setTelefon] = useState("");
+  const [poruka, setPoruka] = useState<{
+    tekst: string;
+    tip: "uspjeh" | "greska";
+  } | null>(null);
+
+  // KORAK A: Dohvaćanje zadnjeg odabranog datuma iz localStorage-a nakon što se komponenta montira na klijentu
+  useEffect(() => {
+    const spremljeniDatum = localStorage.getItem("zadnjiOdabraniDatum");
+    if (spremljeniDatum) {
+      setOdabraniDatum(spremljeniDatum);
+    }
+  }, []);
+
+  // KORAK B: DOHVAĆANJE REZERVACIJA IZ BAZE PRILIKOM UCITAVANJA STRANICE ILI PROMJENE DATUMA
+  useEffect(() => {
+    fetch("/api/rezervacije")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRezervacije(data);
+        }
+      })
+      .catch((err) => console.error("Greška pri dohvaćanju s baze:", err));
+  }, [odabraniDatum]); // Osvježi podatke ako se promijeni datum
+
+  // 4. LOGIKA ZA SPREMANJE REZERVACIJE U BAZU PREKO API RUTE
+  const handleRezervacija = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!odabranoVrijeme || !ime || !telefon) return;
+
+    // Šaljemo podatke na naš backend API
+    try {
+      const res = await fetch("/api/rezervacije", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ime,
+          telefon,
+          datum: odabraniDatum,
+          vrijeme: odabranoVrijeme,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setPoruka({
+          tekst: `Uspješno ste rezervirali termin ${odabranoVrijeme}!`,
+          tip: "uspjeh",
+        });
+
+        // Osiguravamo da je trenutni datum spremljen u localStorage nakon uspješne rezervacije
+        localStorage.setItem("zadnjiOdabraniDatum", odabraniDatum);
+
+        // Povuci svježe podatke kako bi gumb odmah postao siv bez F5
+        const osvjezi = await fetch("/api/rezervacije");
+        const noveRezervacije = await osvjezi.json();
+        if (Array.isArray(noveRezervacije)) {
+          setRezervacije(noveRezervacije);
+        }
+
+        // Resetiranje forme i zatvaranje prozora za unos
+        setIme("");
+        setTelefon("");
+        setOdabranoVrijeme(null);
+      } else {
+        // Ako je backend javio grešku (npr. termin zauzet u međuvremenu)
+        setPoruka({
+          tekst: data.message || "Dogodila se greška prilikom spremanja.",
+          tip: "greska",
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      setPoruka({
+        tekst: "Komunikacija sa serverom nije uspjela.",
+        tip: "greska",
+      });
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-screen bg-slate-50 p-4 md:p-12 text-slate-800">
+      <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        {/* Zaglavlje */}
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 text-white text-center">
+          <h1 className="text-4xl font-black tracking-tight">
+            PADEL REZERVACIJE 🎾
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 text-emerald-100 font-medium">
+            Odaberite datum i pronađite slobodan termin
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <div className="p-6 md:p-8">
+          {/* Obavijesti o uspjehu/grešci */}
+          {poruka && (
+            <div
+              className={`p-4 mb-6 rounded-xl font-semibold text-center text-sm border ${
+                poruka.tip === "uspjeh"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-rose-50 border-rose-200 text-rose-800"
+              }`}
+            >
+              {poruka.tekst}
+            </div>
+          )}
+
+          {/* KORAK 1: ODABIR DATUMA */}
+          <div className="mb-8 max-w-xs mx-auto text-center">
+            <label className="block text-sm font-bold text-slate-600 mb-2 uppercase tracking-wider">
+              1. Odaberite datum
+            </label>
+            <input
+              type="date"
+              value={odabraniDatum}
+              min={danasnjiDatum} // Korisnik ne može birati prošlost
+              onChange={(e) => {
+                const noviDatum = e.target.value;
+                setOdabraniDatum(noviDatum);
+                localStorage.setItem("zadnjiOdabraniDatum", noviDatum); // SPREMAMO U LOCALSTORAGE
+                setOdabranoVrijeme(null); // Resetiraj odabir vremena ako promijeni datum
+                setPoruka(null);
+              }}
+              className="w-full p-3 text-center border-2 border-emerald-500 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-lg text-emerald-700 bg-emerald-50/50"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+
+          {/* KORAK 2: PRIKAZ RASPOREDA ZA TAJ DAN */}
+          <div className="mb-8">
+            <h2 className="text-lg font-bold text-slate-600 mb-4 uppercase tracking-wider text-center">
+              2. Stanje termina za dan:{" "}
+              <span className="text-slate-800 font-black">{odabraniDatum}</span>
+            </h2>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {sviTermini.map((satnica) => {
+                // 1. Provjera je li termin već zauzet u bazi podataka
+                const jeZauzet = rezervacije.some(
+                  (r) => r.datum === odabraniDatum && r.vrijeme === satnica,
+                );
+
+                // 2. LOGIKA ZA TERMINE U PROŠLOSTI (ZA DANAŠNJI DAN)
+                let jeUProslosti = false;
+
+                if (odabraniDatum === danasnjiDatum) {
+                  // Izvlačimo početno vrijeme termina (npr. iz "17:00 - 18:00" uzimamo "17:00")
+                  const pocetnoVrijeme = satnica.split(" - ")[0]; // "17:00"
+                  const [satTermina, minutaTermina] = pocetnoVrijeme
+                    .split(":")
+                    .map(Number);
+
+                  // Dohvaćamo trenutno stvarno vrijeme na uređaju korisnika
+                  const sada = new Date();
+                  const trenutniSat = sada.getHours();
+                  const trenutnaMinuta = sada.getMinutes();
+
+                  // Ako je sat termina manji od trenutnog sata, termin je prošao
+                  if (satTermina < trenutniSat) {
+                    jeUProslosti = true;
+                  }
+                  // Ako je sat isti, ali je minuta termina manja od trenutne minute, također je prošao
+                  else if (
+                    satTermina === trenutniSat &&
+                    minutaTermina < trenutnaMinuta
+                  ) {
+                    jeUProslosti = true;
+                  }
+                }
+
+                // Gumb mora biti onemogućen ako je ILI zauzet ILI je u prošlosti
+                const onemoguciGumb = jeZauzet || jeUProslosti;
+
+                return (
+                  <button
+                    key={satnica}
+                    disabled={onemoguciGumb}
+                    onClick={() => {
+                      setOdabranoVrijeme(satnica);
+                      setPoruka(null);
+                    }}
+                    className={`p-4 rounded-2xl text-center font-bold transition duration-200 shadow-sm ${
+                      onemoguciGumb
+                        ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" // Izgled ako je ZAUZETO ili U PROŠLOSTI
+                        : odabranoVrijeme === satnica
+                          ? "bg-emerald-600 text-white ring-4 ring-emerald-300 scale-95" // TRENUTAČNO ODABRAN
+                          : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:scale-105" // SLOBODAN
+                    }`}
+                  >
+                    <div className="text-sm">{satnica}</div>
+                    <div className="text-xs mt-1 font-semibold uppercase tracking-wider">
+                      {jeZauzet
+                        ? "❌ Zauzeto"
+                        : jeUProslosti
+                          ? "🕒 Prošlo"
+                          : "✅ Slobodno"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* KORAK 3: POJAVLJIVANJE FORME NAKON ODABIRA SLOBODNOG TERMINA */}
+          {odabranoVrijeme && (
+            <div className="mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto animate-fadeIn">
+              <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">
+                Unesite podatke za rezervaciju
+              </h3>
+              <p className="text-sm text-center text-emerald-600 font-semibold mb-4">
+                Odabrano vrijeme: {odabranoVrijeme}
+              </p>
+
+              <form onSubmit={handleRezervacija} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-600 mb-1">
+                    Vaše Ime i Prezime
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={ime}
+                    onChange={(e) => setIme(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="npr. Ivan Horvat"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-600 mb-1">
+                    Kontakt mobitel
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={telefon}
+                    onChange={(e) => setTelefon(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="npr. 091 234 5678"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setOdabranoVrijeme(null)}
+                    className="w-1/3 border border-slate-300 text-slate-600 p-3 rounded-xl font-bold hover:bg-slate-100 transition"
+                  >
+                    Odustani
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white p-3 rounded-xl font-bold transition shadow-md"
+                  >
+                    Potvrdi i Rezerviraj
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

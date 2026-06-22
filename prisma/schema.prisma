@@ -1,0 +1,20 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Model za tvoje rezervacije padela
+model Rezervacija {
+  id        Int      @id @default(autoincrement())
+  ime       String
+  telefon   String
+  datum     String   
+  vrijeme   String   
+  createdAt DateTime @default(now())
+}
