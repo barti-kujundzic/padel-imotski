@@ -5,12 +5,15 @@ interface Rezervacija {
   id: number;
   ime: string;
   telefon: string;
+  email: string;
   datum: string;
   vrijeme: string;
+  token: string;
+  potvrdjeno: boolean;
+  createdAt: string;
 }
 
 export default function Home() {
-  // 1. POPIS SVIH MOGUĆIH TERMINA TIJEKOM DANA
   const sviTermini = [
     "08:00 - 09:00",
     "09:00 - 10:00",
@@ -30,7 +33,6 @@ export default function Home() {
     "23:00 - 00:00",
   ];
 
-  // Funkcija koja sigurno računa lokalni datum na uređaju korisnika (izbjegava UTC pomak)
   const dobijLokalniDatum = () => {
     const d = new Date();
     const godina = d.getFullYear();
@@ -41,7 +43,6 @@ export default function Home() {
 
   const danasnjiDatum = dobijLokalniDatum();
 
-  // 2. STANJA ZA PODATKE I INTERAKCIJU
   const [rezervacije, setRezervacije] = useState<Rezervacija[]>([]);
   const [odabraniDatum, setOdabraniDatum] = useState(danasnjiDatum);
   const [odabranoVrijeme, setOdabranoVrijeme] = useState<string | null>(null);
@@ -49,18 +50,17 @@ export default function Home() {
   // Stanja za formu
   const [ime, setIme] = useState("");
   const [telefon, setTelefon] = useState("");
+  const [email, setEmail] = useState("");
   const [poruka, setPoruka] = useState<{
     tekst: string;
     tip: "uspjeh" | "greska";
   } | null>(null);
 
-  // KORAK A: Dohvaćanje i provjera datuma iz localStorage-a nakon montiranja komponente
   useEffect(() => {
     const spremljeniDatum = localStorage.getItem("zadnjiOdabraniDatum");
     const lokalniDanas = dobijLokalniDatum();
 
     if (spremljeniDatum) {
-      // Ako je spremljeni datum stariji od današnjeg, resetiraj na danasnji dan
       if (spremljeniDatum < lokalniDanas) {
         setOdabraniDatum(lokalniDanas);
         localStorage.setItem("zadnjiOdabraniDatum", lokalniDanas);
@@ -72,7 +72,6 @@ export default function Home() {
     }
   }, []);
 
-  // KORAK B: DOHVAĆANJE REZERVACIJA IZ BAZE PRILIKOM UCITAVANJA STRANICE ILI PROMJENE DATUMA
   useEffect(() => {
     fetch("/api/rezervacije")
       .then((res) => res.json())
@@ -82,13 +81,12 @@ export default function Home() {
         }
       })
       .catch((err) => console.error("Greška pri dohvaćanju s baze:", err));
-  }, [odabraniDatum]); // Osvježi podatke ako se promijeni datum
+  }, [odabraniDatum]);
 
-  // 4. LOGIKA ZA SPREMANJE REZERVACIJE U BAZU PREKO API RUTE
   const handleRezervacija = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!odabranoVrijeme || !ime || !telefon) return;
+    if (!odabranoVrijeme || !ime || !telefon || !email) return;
 
     try {
       const res = await fetch("/api/rezervacije", {
@@ -99,6 +97,7 @@ export default function Home() {
         body: JSON.stringify({
           ime,
           telefon,
+          email,
           datum: odabraniDatum,
           vrijeme: odabranoVrijeme,
         }),
@@ -107,27 +106,27 @@ export default function Home() {
       const data = await res.json();
 
       if (res.ok) {
+        // Obavještavamo korisnika da provjeri svoj e-mail sandučić
         setPoruka({
-          tekst: `Uspješno ste rezervirali termin ${odabranoVrijeme}!`,
+          tekst: `Zahtjev poslan! Molimo provjerite vaš e-mail kako biste POTVRDILI rezervaciju termina ${odabranoVrijeme}.`,
           tip: "uspjeh",
         });
 
-        // Osiguravamo da je trenutni datum spremljen u localStorage nakon uspješne rezervacije
         localStorage.setItem("zadnjiOdabraniDatum", odabraniDatum);
 
-        // Povuci svježe podatke kako bi gumb odmah postao siv bez F5 osvježavanja
+        // Osvježavamo listu (koja sada povlači samo potvrđene s backend-a)
         const osvjezi = await fetch("/api/rezervacije");
         const noveRezervacije = await osvjezi.json();
         if (Array.isArray(noveRezervacije)) {
           setRezervacije(noveRezervacije);
         }
 
-        // Resetiranje forme i zatvaranje prozora za unos podatak
+        // Resetiranje polja forme
         setIme("");
         setTelefon("");
+        setEmail("");
         setOdabranoVrijeme(null);
       } else {
-        // Ako je backend javio grešku (npr. termin je zauzet u međuvremenu)
         setPoruka({
           tekst: data.message || "Dogodila se greška prilikom spremanja.",
           tip: "greska",
@@ -145,7 +144,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 p-4 md:p-12 text-slate-800">
       <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-        {/* Zaglavlje */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 text-white text-center">
           <h1 className="text-4xl font-black tracking-tight">
             PADEL REZERVACIJE 🎾
@@ -156,7 +154,6 @@ export default function Home() {
         </div>
 
         <div className="p-6 md:p-8">
-          {/* Obavijesti o uspjehu/grešci */}
           {poruka && (
             <div
               className={`p-4 mb-6 rounded-xl font-semibold text-center text-sm border ${
@@ -169,7 +166,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* KORAK 1: ODABIR DATUMA */}
           <div className="mb-8 max-w-xs mx-auto text-center">
             <label className="block text-sm font-bold text-slate-600 mb-2 uppercase tracking-wider">
               1. Odaberite datum
@@ -177,19 +173,18 @@ export default function Home() {
             <input
               type="date"
               value={odabraniDatum}
-              min={danasnjiDatum} // Korisnik ne može birati dane u prošlosti
+              min={danasnjiDatum}
               onChange={(e) => {
                 const noviDatum = e.target.value;
                 setOdabraniDatum(noviDatum);
-                localStorage.setItem("zadnjiOdabraniDatum", noviDatum); // SPREMAMO U LOCALSTORAGE
-                setOdabranoVrijeme(null); // Resetiraj odabir vremena ako promijeni datum
+                localStorage.setItem("zadnjiOdabraniDatum", noviDatum);
+                setOdabranoVrijeme(null);
                 setPoruka(null);
               }}
               className="w-full p-3 text-center border-2 border-emerald-500 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-lg text-emerald-700 bg-emerald-50/50"
             />
           </div>
 
-          {/* KORAK 2: PRIKAZ RASPOREDA ZA TAJ DAN */}
           <div className="mb-8">
             <h2 className="text-lg font-bold text-slate-600 mb-4 uppercase tracking-wider text-center">
               2. Stanje termina za dan:{" "}
@@ -198,32 +193,23 @@ export default function Home() {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {sviTermini.map((satnica) => {
-                // 1. Provjera je li termin već zauzet u bazi podataka
                 const jeZauzet = rezervacije.some(
                   (r) => r.datum === odabraniDatum && r.vrijeme === satnica,
                 );
-
-                // 2. LOGIKA ZA TERMINE U PROŠLOSTI (ZA DANAŠNJI DAN)
                 let jeUProslosti = false;
 
                 if (odabraniDatum === danasnjiDatum) {
-                  // Izvlačimo početno vrijeme termina (npr. iz "17:00 - 18:00" uzimamo "17:00")
                   const pocetnoVrijeme = satnica.split(" - ")[0];
                   const [satTermina, minutaTermina] = pocetnoVrijeme
                     .split(":")
                     .map(Number);
-
-                  // Realno trenutno vrijeme na uređaju korisnika
                   const sada = new Date();
                   const trenutniSat = sada.getHours();
                   const trenutnaMinuta = sada.getMinutes();
 
-                  // Ako je sat termina manji od trenutnog sata, termin je prošao
                   if (satTermina < trenutniSat) {
                     jeUProslosti = true;
-                  }
-                  // Ako je sat isti, ali je minuta termina manja od trenutne minute, također je prošao
-                  else if (
+                  } else if (
                     satTermina === trenutniSat &&
                     minutaTermina < trenutnaMinuta
                   ) {
@@ -231,13 +217,13 @@ export default function Home() {
                   }
                 }
 
-                // Gumb mora biti onemogućen ako je ILI zauzet ILI je u prošlosti
                 const onemoguciGumb = jeZauzet || jeUProslosti;
 
                 return (
                   <button
                     key={satnica}
                     disabled={onemoguciGumb}
+                    type="button"
                     onClick={() => {
                       setOdabranoVrijeme(satnica);
                       setPoruka(null);
@@ -264,7 +250,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* KORAK 3: POJAVLJIVANJE FORME NAKON ODABIRA SLOBODNOG TERMINA */}
           {odabranoVrijeme && (
             <div className="mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto">
               <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">
@@ -286,6 +271,19 @@ export default function Home() {
                     onChange={(e) => setIme(e.target.value)}
                     className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
                     placeholder="npr. Ivan Horvat"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-600 mb-1">
+                    E-mail adresa
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="npr. ivan.horvat@email.com"
                   />
                 </div>
                 <div>
@@ -319,6 +317,28 @@ export default function Home() {
               </form>
             </div>
           )}
+        </div>
+      </div>
+      {/* SADA DODAJEMO LOKACIJU ISPOD GLAVNE KARTICE */}
+      <div className="max-w-4xl mx-auto mt-8 bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 p-6 md:p-8">
+        <h2 className="text-xl font-bold text-slate-800 mb-2 uppercase tracking-wider text-center md:text-left flex items-center justify-center md:justify-start gap-2">
+          📍 Gdje se nalazimo?
+        </h2>
+        <p className="text-sm text-slate-500 mb-4 text-center md:text-left">
+          Glavina Donja 171, 21260, Glavina Donja
+        </p>
+
+        {/* Google Maps Iframe kontejner koji je responzivan */}
+        <div className="w-full h-80 rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
+          <iframe
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2078.3486841549916!2d17.180553900000003!3d43.4425667!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x134add3adea16a93%3A0x67ed592af43d1601!2sPadel%20Imotski!5e1!3m2!1shr!2shr!4v1782495107073!5m2!1shr!2shr"
+            width="100%"
+            height="100%"
+            style={{ border: 0 }}
+            allowFullScreen={false}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          ></iframe>
         </div>
       </div>
     </main>
