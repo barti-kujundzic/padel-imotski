@@ -8,7 +8,6 @@ The application was developed as a real-world project with a focus on usability,
 
 - 📅 View available court time slots
 - 🎾 Book padel court sessions
-- 👤 User authentication
 - 📋 Manage reservations
 - 📧 Email notifications
 - 📱 Responsive design
