@@ -69,15 +69,15 @@ My work included:
 
 ### Available Time Slots
 
-_Add screenshot here_
+![Available Time Slots](screenshots/available-slots.png)
 
 ### Booking
 
-_Add screenshot here_
+![Booking](screenshots/reservation.png)
 
 ### Reservation Management
 
-_Add screenshot here_
+![Reservation Management](screenshots/reservation-confirmed.png)
 
 ## 🚀 Getting Started
 
