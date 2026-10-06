@@ -65,7 +65,7 @@ My work included:
 
 ### Home Page
 
-_Add screenshot here_
+![Home Page](screenshots/home.png)
 
 ### Available Time Slots
 
