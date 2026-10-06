@@ -84,8 +84,8 @@ My work included:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/barti-kujundzic/YOUR-REPOSITORY.git
-cd YOUR-REPOSITORY
+git clone https://github.com/barti-kujundzic/padel-imotski.git
+cd padel-imotski
 ```
 
 ### 2. Install dependencies
