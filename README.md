@@ -120,7 +120,7 @@ http://localhost:3000
 
 ## 🌐 Live Demo
 
-_Add live demo link here_
+https://padel-imotski.vercel.app/
 
 ## 📚 What I Learned
 
